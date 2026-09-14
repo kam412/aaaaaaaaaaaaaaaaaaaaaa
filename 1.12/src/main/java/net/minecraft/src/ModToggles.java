@@ -1,98 +1,135 @@
-package net.minecraft.src;
+package com.isacofff.clientbase;
 
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Gui;
+import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.input.Keyboard;
 
 /**
- * Central on/off state for custom client mods, toggled with Right Shift.
- * Add new mods by adding a boolean field + a line in the cycle order.
+ * Small client-side toggle manager used by EntityRenderer.
+ *
+ * Keys:
+ *   Right Shift = show/hide this menu
+ *   G            = FullBright
+ *   Z            = Zoom
  */
-public class ModToggles
+public final class ModToggles
 {
-    public static boolean fullbright = false;
-    public static boolean zoom = false; // zoom uses hold-to-activate separately, see below
-    public static boolean fpsBooster = true; // on by default, it's pure optimization
-    public static boolean noHurtCam = false;   // example "more mods" - disables screen shake on damage
-    public static boolean noHitDelay = false;  // example - removes weapon "cooldown" screen tint
+    public static final int KEY_MENU = Keyboard.KEY_RSHIFT;
+    public static final int KEY_FULLBRIGHT = Keyboard.KEY_G;
+    public static final int KEY_ZOOM = Keyboard.KEY_Z;
 
-    private static boolean rShiftWasDown = false;
-    private static boolean tabWasDown = false;
+    private static boolean fullBright;
+    private static boolean zoom;
+    private static boolean menuOpen;
 
-    /** menu state: is the toggle overlay currently open */
-    public static boolean menuOpen = false;
+    private static boolean lastMenuKey;
+    private static boolean lastFullBrightKey;
+    private static boolean lastZoomKey;
 
-    private static final String[] MOD_NAMES = {
-        "Fullbright",
-        "Zoom (hold Z)",
-        "FPS Booster",
-        "No Hurt Cam",
-        "No Hit Delay"
-    };
-
-    private static int selectedIndex = 0;
-
-    /**
-     * Call this once per client tick (e.g. from Minecraft.runTick or a similar
-     * always-running tick method).
-     */
-    public static void onTick()
+    private ModToggles()
     {
-        boolean rShiftDown = Keyboard.isKeyDown(Keyboard.KEY_RSHIFT);
+    }
 
-        // rising edge only - toggles the menu open/closed, doesn't spam-toggle every tick
-        if (rShiftDown && !rShiftWasDown)
+    /** Called once per rendered frame by EntityRenderer. */
+    public static void update(Minecraft mc)
+    {
+        if (mc == null)
+        {
+            return;
+        }
+
+        // Do not steal keys while another GUI is open.
+        boolean allowKeys = mc.currentScreen == null;
+
+        boolean menuKey = allowKeys && Keyboard.isKeyDown(KEY_MENU);
+        boolean fullBrightKey = allowKeys && Keyboard.isKeyDown(KEY_FULLBRIGHT);
+        boolean zoomKey = allowKeys && Keyboard.isKeyDown(KEY_ZOOM);
+
+        if (menuKey && !lastMenuKey)
         {
             menuOpen = !menuOpen;
         }
-        rShiftWasDown = rShiftDown;
 
-        if (menuOpen)
+        if (fullBrightKey && !lastFullBrightKey)
         {
-            boolean tabDown = Keyboard.isKeyDown(Keyboard.KEY_TAB);
-            if (tabDown && !tabWasDown)
-            {
-                selectedIndex = (selectedIndex + 1) % MOD_NAMES.length;
-            }
-            tabWasDown = tabDown;
-
-            if (Keyboard.isKeyDown(Keyboard.KEY_RETURN))
-            {
-                toggleByIndex(selectedIndex);
-            }
+            fullBright = !fullBright;
         }
-    }
 
-    private static void toggleByIndex(int index)
-    {
-        switch (index)
+        if (zoomKey && !lastZoomKey)
         {
-            case 0: fullbright = !fullbright; break;
-            case 1: zoom = !zoom; break;
-            case 2: fpsBooster = !fpsBooster; break;
-            case 3: noHurtCam = !noHurtCam; break;
-            case 4: noHitDelay = !noHitDelay; break;
+            zoom = !zoom;
         }
+
+        lastMenuKey = menuKey;
+        lastFullBrightKey = fullBrightKey;
+        lastZoomKey = zoomKey;
     }
 
-    public static String[] getModNames()
+    public static boolean isFullBright()
     {
-        return MOD_NAMES;
+        return fullBright;
     }
 
-    public static int getSelectedIndex()
+    public static boolean isZoomEnabled()
     {
-        return selectedIndex;
+        return zoom;
     }
 
-    public static boolean isEnabled(int index)
+    public static boolean isMenuOpen()
     {
-        switch (index)
+        return menuOpen;
+    }
+
+    public static void setFullBright(boolean enabled)
+    {
+        fullBright = enabled;
+    }
+
+    public static void setZoomEnabled(boolean enabled)
+    {
+        zoom = enabled;
+    }
+
+    public static void setMenuOpen(boolean open)
+    {
+        menuOpen = open;
+    }
+
+    /**
+     * Draws a simple toggle list in the upper-left corner.
+     * This is deliberately rendered from EntityRenderer so it appears over the game.
+     */
+    public static void renderOverlay(Minecraft mc)
+    {
+        if (mc == null || !menuOpen || mc.world == null || mc.currentScreen != null || mc.gameSettings.hideGUI)
         {
-            case 0: return fullbright;
-            case 1: return zoom;
-            case 2: return fpsBooster;
-            case 3: return noHurtCam;
-            case 4: return noHitDelay;
-            default: return false;
+            return;
         }
+
+        int x = 8;
+        int y = 8;
+        int width = 150;
+        int height = 76;
+
+        GlStateManager.pushMatrix();
+        GlStateManager.pushAttrib();
+
+        Gui.drawRect(x, y, x + width, y + height, 0xD0101418);
+        Gui.drawRect(x, y, x + width, y + 2, 0xFF5FA8A0);
+
+        mc.fontRenderer.drawStringWithShadow("MOD TOGGLES", x + 8, y + 7, 0xFFFFFFFF);
+        mc.fontRenderer.drawStringWithShadow(
+                "FullBright: " + (fullBright ? "ON" : "OFF"),
+                x + 8, y + 23, fullBright ? 0xFF55FF55 : 0xFFFF5555);
+        mc.fontRenderer.drawStringWithShadow(
+                "Zoom: " + (zoom ? "ON" : "OFF"),
+                x + 8, y + 38, zoom ? 0xFF55FF55 : 0xFFFF5555);
+        mc.fontRenderer.drawStringWithShadow("RSHIFT: hide menu", x + 8, y + 53, 0xFFAAAAAA);
+        mc.fontRenderer.drawStringWithShadow("G / Z: toggle", x + 8, y + 65, 0xFFAAAAAA);
+
+        GlStateManager.popAttrib();
+        GlStateManager.popMatrix();
     }
 }
+
